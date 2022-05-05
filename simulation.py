@@ -1,223 +1,316 @@
-#original
-import pygame
-import sys
-from pygame.locals import *
-from pygame import *
-import tkinter
-import pickle
 import os
-from tkinter.filedialog import asksaveasfile
-import re #regular expression
-from borderLineGenerator import BorderLineGenerator
-from population import Population
+import pygame
+import pickle
+import neat
+from point import Point, GetDistance
+from spline import Spline
+from math import sin, radians, degrees, copysign, sqrt
+from pygame.math import Vector2
+from car import Car
+from utils import TrackTriangles, translate
+from constants import *
+from setup import *
+pygame.init()
+# pygame.display.set_caption(" Self Driving Car")
+screen = pygame.display.set_mode((Width, Height), vsync=True)
+clock = pygame.time.Clock()
+fps = 60
+
+# load Assets
+track_filename = "./map/new_track3"
+current_directory = os.path.dirname(os.path.abspath(__file__))
+carImage_path = os.path.join(current_directory, "car2.png")
+car_sprite = pygame.image.load(carImage_path)
+sprite = pygame.transform.scale(car_sprite, CAR_SIZE)
 
 
 
-class Tile: #Parent class
-    __size = 10 #Pixel size of tile
-    tileID = 0
+#  ---- Initiate New splines and lines ---
 
-    def __init__(self, x ,y):
-        self.x = x
-        self.y = y
-        self.tileID = Tile.tileID
-        Tile.tileID += 1
+'''track = Spline()
+trackTopBound = Spline()
+trackBottomBound = Spline()
+trackTopBound.pointRadius = 1
+trackBottomBound.pointRadius = 1
 
-    def getSize():
-        return Tile.__size
-    
-    def setSize(size):
-        if Tile.__size is not None:
-            Tile.__size = size
+track.CreatePoints(N_POINTS, False)
+trackBottomBound.CreatePoints(N_POINTS, False)
+trackTopBound.CreatePoints(N_POINTS, False)
 
-class Wall(Tile): #Child class which inherites the previous class' attributes and methods
-    colour = (245,208,51) #sets clour to red
-    def show(self, screen):
-        #subroutine to display wall
-        pygame.draw.rect(screen, Wall.colour, (self.x, self.y, Tile.getSize(), Tile.getSize())) #should draw the wall onto screen(the screen) using the colour
-        pygame.draw.rect(screen, (255, 255, 255), (self.x, self.y, Tile.getSize(), Tile.getSize()),1)
-         #updates pygame screen (not working for some reason)
+track.resolution = SPLINE_RESOLUTION
+trackBottomBound.resolution = SPLINE_RESOLUTION
+trackTopBound.resolution = SPLINE_RESOLUTION
+TrackLines = []'''
 
+# -- OR --
 
-class Track(Tile): #same thing but for the track (another type of tile so Tile is the parent class again
-    colour = (0,0,0)
-    def __init__(self, x, y):
-        Tile.__init__(self, x, y)
-        self.north = self.east = self.south = self.west = False
+# ---- load the Saved data ----
+# if you load the tracks and it doesn't look like before (incomplete)
+# check if the constants is the
+# same as the saved data
 
-    def show(self, screen):
-        pygame.draw.rect(screen, Track.colour, (self.x, self.y, Tile.getSize(), Tile.getSize()))
-        pygame.draw.rect(screen, (255, 255, 255), (self.x, self.y, Tile.getSize(), Tile.getSize()),1)
-        #pygame.display.update()
+filename = "./map/track4"
+loadData = pickle.load(open(filename, 'rb'))
+track = loadData['TRACK']
+trackTopBound = loadData['TOP_TRACK']
+trackBottomBound = loadData['BOTTOM_TRACK']
+TrackLines = loadData['LINES']
 
+# ---------
 
-class statsBox:
-    def __init__(self, x, y, w, h): #initialises class with x and y for positions and w and h for width/height
-        self.x = x
-        self.y = y
-        self.w = w #width
-        self.h = h #height
+debug=False
+editorMode = False
+edit=False
+wireframe=False
+wireframeLine=False
+updateLines = False
+Lines = None
+# set changed=True if you want to edit a track or create a new one
+changed = False
 
-        pygame.font.init() #initialises font
-        self.font = pygame.font.SysFont('Irongate', 25) #sets font
+saveChange = False
+ThemeIndex = 3
+generation = 0
+showPanel = False
 
-    def show(self, screen, bestFitness, generationNum, carsLeft):
-        #subroutine to show the stats pane
-        bestFitnessText = self.font.render("Best fitness: " + str(bestFitness), False, (0,0,0))
-        generationNumtext = self.font.render("Current gen: " + str(generationNum), False, (0,0,0))
-        carsLeftText = self.font.render("Cars per gen: " + str(carsLeft), False, (0,0,0)) #Test 12.2
+def Fitness(genomes, config):
+    global ThemeIndex, edit, debug, editorMode, wireframe, wireframeLine, updateLines
+    global changed, saveChange, showPanel, generation
+    global TRACK_WIDTH 
+    nets = []
+    genes = []
+    cars = []
 
-        
-        pygame.draw.rect(screen, (220,220,220), (self.x, self.y, self.w, self.h))
+    for index, genome in genomes:
+        genome.fitness = 0
+        nn = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(nn)
 
-        
+        car = Car(4, 20)
+        car.sprite = sprite
+        car.angle = 90
+        cars.append(car)
+        genome.fitness = 0
+        genes.append(genome)
 
-        screen.blit(bestFitnessText, (self.x + 10, self.y + 10))
-        screen.blit(generationNumtext, (self.x + 10, self.y + 50))
-        screen.blit(carsLeftText, (self.x + 150, self.y + 50)) #Test 12.2
-        #pygame.display.update()
-        
+    counter = 1
 
-class Simulation:
-    def __init__(self, MapDict, mutation, loadedWeights, carNum):
-        pygame.init()
-        SCREEN_W = pygame.display.Info().current_w
-        SCREEN_H = pygame.display.Info().current_h
+    run = True
+    MouseClicked = False
+    generation += 1
+    GenerationText.text = "Generation : " + str(generation)
+    PopulationText.text = "Population size: " + str(len(cars))
+    survivors = len(cars)
+    while run:
+        screen.fill(Themes[ThemeIndex]["background"])
 
-        self.carNum = carNum
+        dt = clock.get_time()/1000
+        clock.tick(fps)
+        framerate = clock.get_fps()
+        pygame.display.set_caption("Self Driving Car AI - FrameRate(fps) : {}".format(int(framerate)))
 
-        (self.W, self.H) = self.setWindowSize(MapDict, SCREEN_W - 100, SCREEN_H - 100)
+        if edit == True:
+            changed = True
 
-        self.screen = pygame.display.set_mode((self.W, self.H)) #initialises pygame display under variable screen
-        self.screen.set_alpha(0) #alpha value determines transparency
-
-        pygame.display.set_caption('grid') #caption for window
-        self.fpsClock = pygame.time.Clock()
-        self.screen.fill((0,255,0), rect = None) #screen col
-
-        #info section
-        pygame.draw.rect(self.screen, (220,220,220), (0, (self.H - Tile.getSize()), self.W, Tile.getSize())) #changed - to , (solved black screen error)
-        self.statsPane = statsBox(0, (self.H - Tile.getSize()), self.W, Tile.getSize() )
-        (self.walls, self.tracks) = Simulation.generateMap(MapDict)
-        for w in self.walls:
-            w.show(self.screen)
-        for t in self.tracks:
-            t.show(self.screen)
-        self.lines = BorderLineGenerator(self.tracks, MapDict["rows"], MapDict["columns"], Tile.getSize())
-        self.lines = self.lines.generate()
-        self.CHECKPOINTS = self.calcCheckpoints()
-        startTile = self.tracks[MapDict["startingID"]]
-        frontX = startTile.x + Tile.getSize()*1/3
-        frontY = startTile.y + Tile.getSize()/2
-        self.population = Population(int(carNum), (int(frontX), int(frontY)), int(Tile.getSize()*1/3), mutation)
-        if loadedWeights is not None:
-            self.population.cars[0].brain.weights1 = loadedWeights[0]
-            self.population.cars[0].brain.weights2 = loadedWeights[1]
-            self.population.cars[0].brain.weights3 = loadedWeights[2]
-        self.animationLoop()
-        
-
-    def setWindowSize(self, MapDict, devW, devH):
-        tileSize = 0
-        while tileSize * ((MapDict["rows"] + 1)) < devH and tileSize * (MapDict["columns"]) < devW:
-            tileSize += 1
-        tileSize -= 1
-        Tile.setSize(tileSize)
-        return (tileSize * MapDict["columns"], tileSize * (MapDict["rows"] + 1))
-
-    def calcCheckpoints(self):
-        checkPoints = []
-        size = Tile.getSize()
-
-        for t in self.tracks:
-            if t.north:
-                northLine = ([(t.x, t.y), (t.x + size, t.y)])
-                if northLine not in checkPoints:
-                    checkPoints.append(northLine)
-            if t.east:
-                eastLine = ([(t.x + size, t.y), (t.x + size, t.y + size)])
-                if eastLine not in checkPoints:
-                    checkPoints.append(eastLine)
-            if t.south:
-                southLine = ([(t.x, t.y + size), (t.x + size, t.y + size)])
-                if southLine not in checkPoints:
-                    checkPoints.append(southLine)
-            if t.west:
-                westLine = ([(t.x, t.y), (t.x, t.y + size)])
-                if westLine not in checkPoints:
-                    checkPoints.append(westLine)
-
-        return checkPoints
-
-
-    def generateMap(MapDict):
-        rows = MapDict["rows"]
-        columns = MapDict["columns"]
-        mapRLE = MapDict["data"]
-
-        mapRLEarray = re.split(r'(\d+)', mapRLE)[1:]
-        mapRLE2Darray = []
-        for i in range(0, len(mapRLEarray), 2):
-            mapRLE2Darray.append([mapRLEarray[i], mapRLEarray[i+1]])
-
-
-        #create tiles
-        walls = []
-        tracks = []
-        x = 0
-        y = 0
-        for group in mapRLE2Darray: 
-            for n in range(int(group[0])):
-                if x > Tile.getSize()*(columns - 1):
-                    x = 0
-                    y += Tile.getSize()
-
-                if group[1] == 'W':
-                    walls.append(Wall(x,y))
-                elif group[1] == 'T':
-                    tracks.append(Track(x,y))
-
-                x += Tile.getSize()
-        return (walls, tracks)
-
-    def saveWeights(self, weights):
-        root = tkinter.Tk()
-        root.withdraw()
-
-        file = asksaveasfile(initialdir= os.getcwd() + "\\weights", mode = 'wb', defaultextension=".pkl")
-
-        if file is None:
-            return 
-        pickle.dump(weights, file)
-
-    def animationLoop(self):
-        
-        self.statsPane.show(self.screen, "", 1, self.carNum) #shows it's the first generation, no best fitness yet ++ Test 12.2
-        while True:
-            for event in pygame.event.get():
-                if event.type == QUIT:
+        # HANDLE EVENT
+        # q -> Switch themes , Esc -> to close window
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                pygame.quit()
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_ESCAPE:
+                    run = False
                     pygame.quit()
-                    sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL: 
-                    weights = [self.population.cars[-1].brain.weights1, self.population.cars[-1].brain.weights2, self.population.cars[-1].brain.weights3]
-                    self.saveWeights(weights)
+                if event.key == pygame.K_q:
+                    ThemeIndex = (ThemeIndex + 1 ) % len(Themes)
+                if event.key == pygame.K_RETURN or event.key == pygame.K_p:
+                    showPanel = not showPanel
+                if event.key == pygame.K_r:
+                    debug = not debug
+                    wireframeLine= not wireframeLine
+                if event.key == pygame.K_f:
+                    wireframe = not wireframe
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                MouseClicked = True
 
-            if self.population.dead:
-                print("Dead")
-                print(self.population.bestCarFitness)
-                self.population.createNextGeneration()
-            
-            self.statsPane.show(self.screen, self.population.bestCarFitness, self.population.generation, self.carNum) #updates stats pane ++ Test 12.2
+        # --- CAR HANDLE INPUTS ------------
+        # keys = pygame.key.get_pressed()
+        # if keys[pygame.K_UP] or keys[pygame.K_w]:
+        #     car.Forward(dt)
+        #
+        # elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
+        #     car.Backward(dt)
+        #
+        # elif keys[pygame.K_SPACE]:
+        #     car.Brake(dt)
+        # else:
+        #     car.fixed(dt)
+        #
+        # if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        #     car.Right(dt)
+        # elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        #     car.Left(dt)
+        # else:
+        #     car.resetSteering()
+        # ----------------------------------
 
-            for t in self.tracks:
-                t.show(self.screen)
-            self.population.update(self.lines, self.CHECKPOINTS)
-            self.population.show(self.screen)
+        for index, car in enumerate(cars):
 
-            for c in self.population.cars:
-                if c.framesAlive >= 120 and len(c.collidedCheckPoints) == 0:
-                    c.dead = True
+            car.Forward(dt)
+            genes[index].fitness += 0.1
+            output = nets[index].activate(
+                (
+                abs(car.intersections[0]["distance"]),
+                abs(car.intersections[1]["distance"]),
+                abs(car.intersections[2]["distance"]),
+                abs(car.intersections[3]["distance"]),
+                abs(car.intersections[4]["distance"]),
+                )
+            )
 
-            pygame.display.update()
-            self.fpsClock.tick(60)
+            i = output.index(max(output))
+            if i == 0:
+                car.Left(dt)
+            else:
+                car.Right(dt)
+
+            # if output[0] > 0.6:
+            #     car.Right(dt)
+            # elif output[1] > 0.6:
+            #     car.Left(dt)
+
+
+            car.constrainSteering()
+
+        if changed == True:
+            for i in range(N_POINTS ):
+                p1 = track.GetSplinePoints(i * SPLINE_RESOLUTION, True)
+                g1 = track.GetSplineGradient(i * SPLINE_RESOLUTION, True)
+                glength = sqrt(g1[0] * g1[0] + g1[1] * g1[1])
+
+                trackTopBound.points[i].x = p1[0] - TRACK_WIDTH * (-g1[1]/glength)
+                trackTopBound.points[i].y = p1[1] - TRACK_WIDTH * (g1[0]/glength)
+
+                trackBottomBound.points[i].x = p1[0] + TRACK_WIDTH * (-g1[1]/glength)
+                trackBottomBound.points[i].y = p1[1] + TRACK_WIDTH * (g1[0]/glength)
+
+        # draw track triangles and extract the lines out of the track
+        Lines = TrackTriangles(
+            screen ,
+            Top=trackTopBound,
+            Bottom=trackBottomBound,
+            themeIndex=ThemeIndex,
+            updateLines=True,
+            Lines=TrackLines,
+            wireframe=wireframe,
+            wireframeLine=wireframeLine
+            )
+
+        if debug:
+            trackBottomBound.Draw(screen, False)
+            trackTopBound.Draw(screen, False)
+
+        if editorMode:
+            track.Draw(screen, MouseClicked, edit)
+
+        if len(cars) > 0:
+            for index, car in enumerate(cars):
+
+                car.update(screen, dt, TrackLines, debug)
+                car.Draw(screen, debug)
+
+                if car.crashed == True:
+                    pygame.draw.circle(screen, Red, car.center, 8)
+                    genes[index].fitness -= 1
+                    cars.pop(index)
+                    nets.pop(index)
+                    genes.pop(index)
+                    survivors -= 1
+        else:
+            run = False
+
+        # Render UI
+        if showPanel == True:
+            # might need to change the way i render ui for optimisation
+            panel.Render(screen)
+            quitSave.Render(screen)
+            editorModeText.Render(screen)
+            editText.Render(screen)
+            wireframeModeText.Render(screen)
+            showLineText.Render(screen)
+
+
+            editorMode = editorModeToggle.Render(screen, MouseClicked)
+
+            edit = editToggle.Render(screen, MouseClicked)
+            wireframe = wireframeToggle.Render(screen, MouseClicked)
+            debug = ShowlineToggle .Render(screen, MouseClicked)
+            wireframeLine = debug
+
+            if edit == True:
+                TrackWidthText.Render(screen)
+                TRACK_WIDTH = WidthSlider.Render(screen)
+
+        if quitSave.state == True:
+            saveChange = True
+            run = False
+
+        for gene in genes:
+            gene.fitness += 2
+
+        counter += 1
+
+        GenerationText.Render(screen)
+        PopulationText.Render(screen)
+        AgentAliveText.text = "Alive : " + str(survivors)
+        AgentAliveText.Render(screen)
+
+        MouseClicked = False
+        if editorMode:
+            changed = True
+        else:
+            changed = False
+
+        pygame.display.flip()
+
+    # save our edited track and the lines of the track
+    if saveChange == True:
+        data = {
+            "TRACK":track,
+            "TOP_TRACK": trackTopBound,
+            "BOTTOM_TRACK": trackBottomBound,
+            "LINES": TrackLines,
+            "VARIABLES": {
+                "N_POINTS": N_POINTS,
+                "RESOLUTION": SPLINE_RESOLUTION,
+                "TRACK_WIDTH": TRACK_WIDTH
+            }
+        }
+        pickle.dump(data, open(track_filename, 'wb'))
+
+
+# main(genomes, configfiles)
+
+# neat setup
+
+
+def run(config_path):
+    config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        config_path
+        )
+    popul = neat.Population(config)
+    popul.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    popul.add_reporter(stats)
+    winner = popul.run(Fitness,1000)
+
+    # print("\n Best genome: \n{!s}".format(winner))
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__) # current directory
+    config_path = os.path.join(local_dir, "config-feedforward.txt")
+    run(config_path)

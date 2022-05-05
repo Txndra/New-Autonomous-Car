@@ -11,9 +11,8 @@ import tkinter.font as tkFont
 from tkinter.filedialog import askopenfilename
 import pickle #to save and load map
 from typing import Type #for saving map 
-import MapDesign
+import spline
 import simulation as sim
-import threading #Trying to solve tkinter 'Not Responding' problem
 
 
 #Early August update: 03/08/2021
@@ -42,41 +41,17 @@ class Application(tk.Frame):
             background = "white",
             font = self.fontStyle
         ).pack(side = 'top')
-        self.designMap = tk.Button(self, text = 'DESIGN A MAP', font = self.fontStyle, bg = 'black', fg = 'white', command = self.getMapinfo).pack(side = 'top')
+        self.designMap = tk.Button(self, text = 'DESIGN A MAP', font = self.fontStyle, bg = 'black', fg = 'white', command = self.createMap).pack(side = 'top')
         self.runSimulation = tk.Button(self, text = 'RUN SIMULATION', font = self.fontStyle, bg = 'black', fg = 'white', command = self.getSiminfo).pack(side = 'top')
         self.obstacles = tk.Button(self, text = 'ADD/REMOVE OBSTACLES', font = self.fontStyle, bg = 'black', fg = 'white', command = self.getObstacles).pack(side = 'top')
         self.quit = tk.Button(self, text = 'QUIT', font = self.fontStyle, bg = 'black', fg = 'white', command = self.master.destroy).pack(side = 'bottom')
 
-    def getMapinfo(self):
-        sizeWindow = tk.Tk()
-        sizeWindow.title("Grid dimensions")
-
-        rowMessage = tk.Label(sizeWindow, text = 'Enter the number of rows')
-        self.rowInput = tk.Entry(sizeWindow, bd = 5)
-        columnMessage = tk.Label(sizeWindow, text = 'Enter the number of columns')
-        self.columnInput = tk.Entry(sizeWindow, bd = 5)
-        allez = tk.Button(sizeWindow, text = 'START', bg = 'green', command = self.createMap)
-
-        rowMessage.grid(row = 0, column = 0)
-        self.rowInput.grid(row = 0, column = 1) #ctrl C
-        columnMessage.grid(row = 1, column = 0)
-        self.columnInput.grid(row = 1, column = 1)
-        allez.grid(row = 2, column = 1)
-
-        sizeWindow.mainloop()
 
 
 
 
     def createMap(self):
-
-        root = tk.Tk()
-        try:
-            MapDesign.MapCreation(int(self.rowInput.get()),int(self.columnInput.get()), master = root) #Grabs values and creates a window
-        except ValueError:
-            root.withdraw() #Doesn't show the window
-            messagebox.showinfo("Entry error", "Please retry entering values") #messagebox shows message for error
-        
+        pass
 
     def getSiminfo(self):
         menuWindow = tk.Tk()
@@ -169,10 +144,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = Application(master = root)
     app.mainloop()
-
-
-
-
-
-
-
