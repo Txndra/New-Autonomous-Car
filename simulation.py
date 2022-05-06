@@ -10,308 +10,195 @@ from car import Car
 from CT import CT
 from constants import *
 from UI.setup import *
+from neural import Neural
+from MapDesign import MapDesign
 
-pygame.init()
-# pygame.display.set_caption(" Self Driving Car")
-screen = pygame.display.set_mode((Width, Height), vsync=True)
-clock = pygame.time.Clock()
-fps = 60
+class Simulation:
+    def __init__(self):
+        pygame.init()
+        # pygame.display.set_caption(" Self Driving Car")
+        self.screen = pygame.display.set_mode((Width, Height), vsync=True)
+        self.clock = pygame.time.Clock()
+        self.fps = 60
 
-# load Assets
-track_filename = "./map/new_track3"
-current_directory = os.path.dirname(os.path.abspath(__file__))
-carImage_path = os.path.join(current_directory, "./Assets/car2.png")
-car_sprite = pygame.image.load(carImage_path)
-sprite = pygame.transform.scale(car_sprite, CAR_SIZE)
+        # load Assets
+        self.track_filename = "./map/new_track"
+        self.current_directory = os.path.dirname(os.path.abspath(__file__))
+        self.carImage_path = os.path.join(self.current_directory, "./Assets/car1.png")
+        self.car_sprite = pygame.image.load(self.carImage_path)
+        self.sprite = pygame.transform.scale(self.car_sprite, CAR_SIZE)
 
+        self.filename = self.track_filename
+        (self.track, self.trackTopBound, self.trackBottomBound, self.TrackLines) = self.loadData()
+        self.debug=False
+        self.editorMode = False
+        self.edit=False
+        self.wireframe=False
+        self.wireframeLine=False
+        self.updateLines = False
+        self.Lines = None
+        # set changed=True if you want to edit a track or create a new one
+        self.changed = False
 
+        self.saveChange = False
+        self.ThemeIndex = 3
+        self.generation = 0
+        self.showPanel = False
+        self.brain = Neural()
+        self.__local_dir = os.path.dirname(__file__) # current directory
+        config_path = os.path.join(self.__local_dir, "config-feedforward.txt")
+        self.run(config_path)
 
-#  ---- Initiate New splines and lines ---
+    def loadData(self):
+        mapData = pickle.load(open(self.filename, 'rb'))
+        track = mapData['TRACK']
+        trackTopBound = mapData['TOP_TRACK']
+        trackBottomBound = mapData['BOTTOM_TRACK']
+        TrackLines = mapData['LINES']
 
-# track = Spline()
-# trackTopBound = Spline()
-# trackBottomBound = Spline()
-# trackTopBound.pointRadius = 1
-# trackBottomBound.pointRadius = 1
+        return track, trackTopBound, trackBottomBound, TrackLines
 
-# track.CreatePoints(N_POINTS, False)
-# trackBottomBound.CreatePoints(N_POINTS, False)
-# trackTopBound.CreatePoints(N_POINTS, False)
+    def Fitness(self,genomes, config): 
+        nets = []
+        genes = []
+        cars = []
 
-# track.resolution = SPLINE_RESOLUTION
-# trackBottomBound.resolution = SPLINE_RESOLUTION
-# trackTopBound.resolution = SPLINE_RESOLUTION
-# TrackLines = []
+        for index, genome in genomes:
+            genome.fitness = 0
+            nn = neat.nn.FeedForwardNetwork.create(genome, config)
+            nets.append(nn)
 
-# -- OR --
+            car = Car(4, 20)
+            car.sprite = self.sprite
+            car.angle = 90
+            cars.append(car)
+            genome.fitness = 0
+            genes.append(genome)
 
-# ---- load the Saved data ----
-# if you load the tracks and it doesn't look like before (incomplete)
-# check if the constants is the
-# same as the saved data
+        counter = 1
 
-filename = "./map/track4"
-loadData = pickle.load(open(filename, 'rb'))
-track = loadData['TRACK']
-trackTopBound = loadData['TOP_TRACK']
-trackBottomBound = loadData['BOTTOM_TRACK']
-TrackLines = loadData['LINES']
+        run = True
+        MouseClicked = False
+        self.generation += 1
+        GenerationText.text = "Generation : " + str(self.generation)
+        PopulationText.text = "Population size: " + str(len(cars))
+        survivors = len(cars)
+        while run:
+            self.screen.fill(Themes[self.ThemeIndex]["background"])
 
-# ---------
+            dt = self.clock.get_time()/1000
+            self.clock.tick(self.fps)
+            framerate = self.clock.get_fps()
+            pygame.display.set_caption("Self Driving Car AI - FrameRate(fps) : {}".format(int(framerate)))
 
-debug=False
-editorMode = False
-edit=False
-wireframe=False
-wireframeLine=False
-updateLines = False
-Lines = None
-# set changed=True if you want to edit a track or create a new one
-changed = False
-
-saveChange = False
-ThemeIndex = 3
-generation = 0
-showPanel = False
-
-def Fitness(genomes, config):
-    global ThemeIndex, edit, debug, editorMode, wireframe, wireframeLine, updateLines
-    global changed, saveChange, showPanel, generation
-    global TRACK_WIDTH 
-    nets = []
-    genes = []
-    cars = []
-
-    for index, genome in genomes:
-        genome.fitness = 0
-        nn = neat.nn.FeedForwardNetwork.create(genome, config)
-        nets.append(nn)
-
-        car = Car(4, 20)
-        car.sprite = sprite
-        car.angle = 90
-        cars.append(car)
-        genome.fitness = 0
-        genes.append(genome)
-
-    counter = 1
-
-    run = True
-    MouseClicked = False
-    generation += 1
-    GenerationText.text = "Generation : " + str(generation)
-    PopulationText.text = "Population size: " + str(len(cars))
-    survivors = len(cars)
-    while run:
-        screen.fill(Themes[ThemeIndex]["background"])
-
-        dt = clock.get_time()/1000
-        clock.tick(fps)
-        framerate = clock.get_fps()
-        pygame.display.set_caption("Self Driving Car AI - FrameRate(fps) : {}".format(int(framerate)))
-
-        if edit == True:
-            changed = True
-
-        # HANDLE EVENT
-        # q -> Switch themes , Esc -> to close window
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-                pygame.quit()
-            if event.type == pygame.KEYUP:
-                if event.key == pygame.K_ESCAPE:
+            # HANDLE EVENT
+            # q -> Switch themes , Esc -> to close window
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     run = False
                     pygame.quit()
-                if event.key == pygame.K_q:
-                    ThemeIndex = (ThemeIndex + 1 ) % len(Themes)
-                if event.key == pygame.K_RETURN or event.key == pygame.K_p:
-                    showPanel = not showPanel
-                if event.key == pygame.K_r:
-                    debug = not debug
-                    wireframeLine= not wireframeLine
-                if event.key == pygame.K_f:
-                    wireframe = not wireframe
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                MouseClicked = True
+                if event.type == pygame.KEYUP:
+                    if event.key == pygame.K_ESCAPE:
+                        run = False
+                        pygame.quit()
+                    if event.key == pygame.K_q:
+                        self.ThemeIndex = (self.ThemeIndex + 1 ) % len(Themes)     
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    MouseClicked = True
 
-        # --- CAR HANDLE INPUTS ------------
-        # keys = pygame.key.get_pressed()
-        # if keys[pygame.K_UP] or keys[pygame.K_w]:
-        #     car.Forward(dt)
-        #
-        # elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-        #     car.Backward(dt)
-        #
-        # elif keys[pygame.K_SPACE]:
-        #     car.Brake(dt)
-        # else:
-        #     car.fixed(dt)
-        #
-        # if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-        #     car.Right(dt)
-        # elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        #     car.Left(dt)
-        # else:
-        #     car.resetSteering()
-        # ----------------------------------
-
-        for index, car in enumerate(cars):
-
-            car.Forward(dt)
-            genes[index].fitness += 0.1
-            output = nets[index].activate(
-                (
-                abs(car.intersections[0]["distance"]),
-                abs(car.intersections[1]["distance"]),
-                abs(car.intersections[2]["distance"]),
-                abs(car.intersections[3]["distance"]),
-                abs(car.intersections[4]["distance"]),
-                )
-            )
-
-            i = output.index(max(output))
-            if i == 0:
-                car.Left(dt)
-            else:
-                car.Right(dt)
-
-            # if output[0] > 0.6:
-            #     car.Right(dt)
-            # elif output[1] > 0.6:
-            #     car.Left(dt)
-
-
-            car.constrainSteering()
-
-        if changed == True:
-            for i in range(N_POINTS ):
-                p1 = track.GetSplinePoints(i * SPLINE_RESOLUTION, True)
-                g1 = track.GetSplineGradient(i * SPLINE_RESOLUTION, True)
-                glength = sqrt(g1[0] * g1[0] + g1[1] * g1[1])
-
-                trackTopBound.points[i].x = p1[0] - TRACK_WIDTH * (-g1[1]/glength)
-                trackTopBound.points[i].y = p1[1] - TRACK_WIDTH * (g1[0]/glength)
-
-                trackBottomBound.points[i].x = p1[0] + TRACK_WIDTH * (-g1[1]/glength)
-                trackBottomBound.points[i].y = p1[1] + TRACK_WIDTH * (g1[0]/glength)
-
-        # draw track triangles and extract the lines out of the track
-        Lines = CT.TrackTriangles(
-            screen ,
-            Top=trackTopBound,
-            Bottom=trackBottomBound,
-            themeIndex=ThemeIndex,
-            updateLines=True,
-            Lines=TrackLines,
-            wireframe=wireframe,
-            wireframeLine=wireframeLine
-            )
-
-        if debug:
-            trackBottomBound.Draw(screen, False)
-            trackTopBound.Draw(screen, False)
-
-        if editorMode:
-            track.Draw(screen, MouseClicked, edit)
-
-        if len(cars) > 0:
             for index, car in enumerate(cars):
 
-                car.update(screen, dt, TrackLines, debug)
-                car.Draw(screen, debug)
+                car.Forward(dt)
+                genes[index].fitness += 0.1
+                output = nets[index].activate(
+                    (
+                    abs(car.intersections[0]["distance"]),
+                    abs(car.intersections[1]["distance"]),
+                    abs(car.intersections[2]["distance"]),
+                    abs(car.intersections[3]["distance"]),
+                    abs(car.intersections[4]["distance"]),
+                    )
+                )
 
-                if car.crashed == True:
-                    pygame.draw.circle(screen, Red, car.center, 8)
-                    genes[index].fitness -= 1
-                    cars.pop(index)
-                    nets.pop(index)
-                    genes.pop(index)
-                    survivors -= 1
-        else:
-            run = False
+                i = output.index(max(output))
+                if i == 0:
+                    car.Left(dt)
+                else:
+                    car.Right(dt)
 
-        # Render UI
-        if showPanel == True:
-            # might need to change the way i render ui for optimisation
-            panel.Render(screen)
-            quitSave.Render(screen)
-            editorModeText.Render(screen)
-            editText.Render(screen)
-            wireframeModeText.Render(screen)
-            showLineText.Render(screen)
+                # if output[0] > 0.6:
+                #     car.Right(dt)
+                # elif output[1] > 0.6:
+                #     car.Left(dt)
 
 
-            editorMode = editorModeToggle.Render(screen, MouseClicked)
+                car.constrainSteering()
 
-            edit = editToggle.Render(screen, MouseClicked)
-            wireframe = wireframeToggle.Render(screen, MouseClicked)
-            debug = ShowlineToggle .Render(screen, MouseClicked)
-            wireframeLine = debug
 
-            if edit == True:
-                TrackWidthText.Render(screen)
-                TRACK_WIDTH = WidthSlider.Render(screen)
+            # draw track triangles and extract the lines out of the track
+            Lines = CT.TrackTriangles(
+                self.screen ,
+                Top=self.trackTopBound,
+                Bottom=self.trackBottomBound,
+                themeIndex=self.ThemeIndex,
+                updateLines=True,
+                Lines=self.TrackLines,
+                wireframe=self.wireframe,
+                wireframeLine=self.wireframeLine
+                )
 
-        if quitSave.state == True:
-            saveChange = True
-            run = False
+            if self.debug:
+                self.trackBottomBound.Draw(self.screen, False)
+                self.trackTopBound.Draw(self.screen, False)
 
-        for gene in genes:
-            gene.fitness += 2
 
-        counter += 1
+            if len(cars) > 0:
+                for index, car in enumerate(cars):
 
-        GenerationText.Render(screen)
-        PopulationText.Render(screen)
-        AgentAliveText.text = "Alive : " + str(survivors)
-        AgentAliveText.Render(screen)
+                    car.update(self.screen, dt, self.TrackLines, self.debug)
+                    car.Draw(self.screen, self.debug)
 
-        MouseClicked = False
-        if editorMode:
-            changed = True
-        else:
+                    if car.crashed == True:
+                        pygame.draw.circle(self.screen, Red, car.center, 8)
+                        genes[index].fitness -= 1
+                        cars.pop(index)
+                        nets.pop(index)
+                        genes.pop(index)
+                        survivors -= 1
+            else:
+                run = False
+
+            for gene in genes:
+                gene.fitness += 2
+
+            counter += 1
+
+            GenerationText.Render(self.screen)
+            PopulationText.Render(self.screen)
+            AgentAliveText.text = "Alive : " + str(survivors)
+            AgentAliveText.Render(self.screen)
+
+            MouseClicked = False
             changed = False
 
-        pygame.display.flip()
+            pygame.display.flip()
 
-    # save our edited track and the lines of the track
-    if saveChange == True:
-        data = {
-            "TRACK":track,
-            "TOP_TRACK": trackTopBound,
-            "BOTTOM_TRACK": trackBottomBound,
-            "LINES": TrackLines,
-            "VARIABLES": {
-                "N_POINTS": N_POINTS,
-                "RESOLUTION": SPLINE_RESOLUTION,
-                "TRACK_WIDTH": TRACK_WIDTH
-            }
-        }
-        pickle.dump(data, open(track_filename, 'wb'))
-
-
-# main(genomes, configfiles)
-
-# neat setup
+    def run(self, config_path):
+        config = neat.config.Config(
+            neat.DefaultGenome,
+            neat.DefaultReproduction,
+            neat.DefaultSpeciesSet,
+            neat.DefaultStagnation,
+            config_path
+            )
+        popul = neat.Population(config)
+        popul.add_reporter(neat.StdOutReporter(True))
+        stats = neat.StatisticsReporter()
+        popul.add_reporter(stats)
+        winner = popul.run(self.Fitness,1000)
 
 
-def run(config_path):
-    config = neat.config.Config(
-        neat.DefaultGenome,
-        neat.DefaultReproduction,
-        neat.DefaultSpeciesSet,
-        neat.DefaultStagnation,
-        config_path
-        )
-    popul = neat.Population(config)
-    popul.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    popul.add_reporter(stats)
-    winner = popul.run(Fitness,1000)
+    
 
-    # print("\n Best genome: \n{!s}".format(winner))
-if __name__ == "__main__":
-    local_dir = os.path.dirname(__file__) # current directory
-    config_path = os.path.join(local_dir, "config-feedforward.txt")
-    run(config_path)
+
+
