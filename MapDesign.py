@@ -10,6 +10,7 @@ from car import Car
 from CT import CT
 from constants import *
 from UI.setup import *
+import tkinter as tk
 
 class MapDesign:
     def __init__(self):
@@ -29,6 +30,36 @@ class MapDesign:
         self.generation = 0
         self.showPanel = False
         self.createMap()
+
+    def renderTexts(self, screen):
+        panel.Render(screen)
+        quitSave.Render(screen)
+        editorModeText.Render(screen)
+        editText.Render(screen)
+        wireframeModeText.Render(screen)
+        showLineText.Render(screen)
+
+    def getPygameEvents(self):
+        for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                    pygame.quit()
+                if event.type == pygame.KEYUP:
+                    if event.key == pygame.K_ESCAPE:
+                        run = False
+                        pygame.quit()
+                    if event.key == pygame.K_q:
+                        self.ThemeIndex = (self.ThemeIndex + 1 ) % len(Themes)
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_p:
+                        self.showPanel = not self.showPanel
+                    if event.key == pygame.K_r:
+                        self.debug = not self.debug
+                        self.wireframeLine= not self.wireframeLine
+                    if event.key == pygame.K_f:
+                        self.wireframe = not self.wireframe
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    MouseClicked = True
+
 
     def createMap(self):
         self.edit = True
@@ -53,12 +84,7 @@ class MapDesign:
         trackTopBound.resolution = SPLINE_RESOLUTION
         TrackLines = []
 
-        panel.Render(screen)
-        quitSave.Render(screen)
-        editorModeText.Render(screen)
-        editText.Render(screen)
-        wireframeModeText.Render(screen)
-        showLineText.Render(screen)
+        self.renderTexts(screen)
 
 
         run = True
@@ -123,12 +149,7 @@ class MapDesign:
 
             if self.showPanel == True:
             # might need to change the way i render ui for optimisation
-                panel.Render(screen)
-                quitSave.Render(screen)
-                editorModeText.Render(screen)
-                editText.Render(screen)
-                wireframeModeText.Render(screen)
-                showLineText.Render(screen)
+                self.renderTexts(screen)
 
 
                 self.editorMode = editorModeToggle.Render(screen, MouseClicked)
@@ -151,4 +172,29 @@ class MapDesign:
                 self.changed = False
 
             pygame.display.flip()
+        if self.saveChange == True:
+            track_filename = "./map/new_track"
+            current_directory = os.path.dirname(os.path.abspath(__file__))
+            self.saveMap(track, trackTopBound, trackBottomBound, TrackLines, track_filename)
+
+    def carryOn(self):
+        pass
+
+
+    def saveMap(self, track, trackTopBound, trackBottomBound, TrackLines, trackName):
+        data = {
+            "TRACK":track,
+            "TOP_TRACK": trackTopBound,
+            "BOTTOM_TRACK": trackBottomBound,
+            "LINES": TrackLines,
+            "VARIABLES": {
+                "N_POINTS": N_POINTS,
+                "RESOLUTION": SPLINE_RESOLUTION,
+                "TRACK_WIDTH": TRACK_WIDTH
+            }
+        }
+        pickle.dump(data, open(trackName, 'wb'))
+        pygame.quit()
+
+
         
