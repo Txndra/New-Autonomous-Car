@@ -14,7 +14,7 @@ class Button:
         self.temp = color
         self.color = color
         self.borderColor = borderColor
-        self.font = 'freesansbold.ttf'
+        self.font = 'IRONGATE.ttf'
         self.fontSize = 25
         self.textColor = (255, 255, 255)
         self.state = False

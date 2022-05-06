@@ -1,6 +1,6 @@
-Width = 1920
+Width = 1680
 EMPTY_STRING = ''
-Height = 1080
+Height = 900
 
 Black = (0, 0, 0)
 White = (255, 255, 255)
