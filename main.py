@@ -1,218 +1,224 @@
-from asyncio import constants
-import os
 import pygame
-import pickle
-import neat
-from point import Point, GetDistance
-from spline import Spline
-from math import sin, radians, degrees, copysign, sqrt
-from pygame.math import Vector2
-from car import Car
-from CT import CT
-from constants import *
-from UI.setup import *
 import sys
-import tkinter as tk
-from tkinter import messagebox
-import tkinter.font as tkFont
-from tkinter.filedialog import askopenfilename
-from typing import Type
-import simulation as sim
+import random
+import time
+import math
+import numpy as np
+from PIL import Image
 
-class Application(tk.Frame):
-    def __init__(self, master = None):
-        tk.Frame.__init__(self, master)
-        self.master = master
-        self.pack()
-        self.MapDict = None
-        self.fontStyle = tkFont.Font(family = "Lucida Grande", size = 20)
-        self.debug=False
-        self.editorMode = False
-        self.edit=False
-        self.wireframe=False
-        self.wireframeLine=False
-        self.updateLines = False
-        self.Lines = None
-        self.changed = False
-        self.saveChange = False
-        self.ThemeIndex = 3
-        self.generation = 0
-        self.showPanel = False
-        self.displayMenu()
+class Cell:
+    # A wall separates a pair of cells in the N-S or W-E directions.
+    wall_pairs = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 
-    def displayMenu(self):
-        menuTitle = tk.Label(self, text = "Welcome to Sean's Autonomous Car Simulation",
-        foreground = "black",
-        background = "white",
-        font = self.fontStyle
-        ).pack(side = 'top')
-        self.designMap = tk.Button(self, text = 'DESIGN A MAP', font = self.fontStyle, bg = 'black', fg = 'white',
-             command = self.getMapinfo).pack(side = 'top')
-        self.runSimulation = tk.Button(self, text = 'RUN SIMULATION', font = self.fontStyle, bg = 'black', fg = 'white',
-             command = self.runSim).pack(side = 'top')
-        self.obstacles = tk.Button(self, text = 'ADD/REMOVE OBSTACLES', font = self.fontStyle, bg = 'black', fg = 'white',
-             command = self.getObstacles).pack(side = 'top')
-        self.quit = tk.Button(self, text = 'QUIT', font = self.fontStyle, bg = 'black', fg = 'white',
-             command = self.master.destroy).pack(side = 'bottom')
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.walls = {'N': True, 'S': True, 'E': True, 'W': True}
+        self.color = 0, 0, 0
+        self.track = ""
 
-    def getMapinfo(self):
-        self.changed = True
-        pygame.init()
-        screen = pygame.display.set_mode((Width, Height), vsync = True)
-        clock = pygame.time.Clock()
-        fps = 60
+    def has_all_walls(self):
+        return all(self.walls.values())
 
-        track = Spline()
-        trackTopBound = Spline()
-        trackBottomBound = Spline()
-        trackTopBound.pointRadius = 1
-        trackBottomBound.pointRadius = 1
+    def knock_down_wall(self, other, wall):
+        """Knock down the wall between cells self and other."""
+        self.walls[wall] = False
+        other.walls[Cell.wall_pairs[wall]] = False
 
-        track.CreatePoints(N_POINTS, False)
-        trackBottomBound.CreatePoints(N_POINTS, False)
-        trackTopBound.CreatePoints(N_POINTS, False)
+class Maze:
+    """A Maze, represented as a grid of cells."""
+    def __init__(self, nx, ny, ix=0, iy=0):
+        self.nx, self.ny = nx, ny
+        self.ix, self.iy = ix, iy
+        self.maze_map = [[Cell(x, y) for y in range(ny)] for x in range(nx)]
+    def cell_at(self, x, y):
+        return self.maze_map[x][y]
+    def find_valid_neighbours(self, cell):
+        """Return a list of unvisited neighbours to cell."""
 
-        track.resolution = SPLINE_RESOLUTION
-        trackBottomBound.resolution = SPLINE_RESOLUTION
-        trackTopBound.resolution = SPLINE_RESOLUTION
-        TrackLines = []
+        delta = [('W', (-1, 0)),
+                 ('E', (1, 0)),
+                 ('S', (0, 1)),
+                 ('N', (0, -1))]
+        neighbours = []
+        for direction, (dx, dy) in delta:
+            x2, y2 = cell.x + dx, cell.y + dy
+            if (0 <= x2 < self.nx) and (0 <= y2 < self.ny):
+                neighbour = self.cell_at(x2, y2)
+                if neighbour.has_all_walls():
+                    neighbours.append((direction, neighbour))
+        return neighbours
 
-        counter = 1
+pygame.init()
+SCREEN = pygame.display.set_mode((1600, 900))
+CLOCK = pygame.time.Clock()
 
-        run = True
-        MouseClicked = False
+def generateRandomMap():
+        
+    BLACK = (0, 0, 0)
+    WHITE = (255, 255, 255)
+    GREEN = (0, 255, 128)
+    
+    WINDOW_HEIGHT = 730
+    WINDOW_WIDTH = 1460 #These are for the maze/grid, not for the pygame window size
 
-        while run:
-            screen.fill(Themes[self.ThemeIndex]["background"])
+    blockSize = 146 #Set the size of the grid block
+    rows, cols = (int(WINDOW_WIDTH/blockSize), int(WINDOW_HEIGHT/blockSize))  
+    maze = Maze(rows,cols,0,0)
+    
+    trackLenght = 1
+    movex = 70
+    movey = 85
 
-            dt = clock.get_time()/1000
-            clock.tick(fps)
-            framerate = clock.get_fps()
-            pygame.display.set_caption("Self Driving Car AI - FrameRate(fps) : {}".format(int(framerate)))
+    startx, starty = 0, 3
+    currentCell = maze.cell_at(startx, starty)
+    
+    straight1 = pygame.image.load('Images\TracksMapGen\Straight1.png')
+    straight1Rect = straight1.get_rect()
 
-            if self.edit == True:
-                self.changed = True
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    run = False
-                    pygame.quit()
-                if event.type == pygame.KEYUP:
-                    if event.key == pygame.K_ESCAPE:
-                        run = False
-                        pygame.quit()
-                    if event.key == pygame.K_q:
-                        self.ThemeIndex = (self.ThemeIndex + 1 ) % len(Themes)
-                    if event.key == pygame.K_RETURN or event.key == pygame.K_p:
-                        self.showPanel = not self.showPanel
-                    if event.key == pygame.K_r:
-                        debug = not debug
-                        wireframeLine= not wireframeLine
-                    if event.key == pygame.K_f:
-                        wireframe = not wireframe
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    MouseClicked = True
-            if self.changed == True:
-                global TRACK_WIDTH
-                for i in range(N_POINTS ):
-                    p1 = track.GetSplinePoints(i * SPLINE_RESOLUTION, True)
-                    g1 = track.GetSplineGradient(i * SPLINE_RESOLUTION, True)
-                    glength = sqrt(g1[0] * g1[0] + g1[1] * g1[1])
+    straight2 = pygame.image.load('Images\TracksMapGen\Straight2.png')
+    straight2Rect = straight2.get_rect()
 
-                    trackTopBound.points[i].x = p1[0] - TRACK_WIDTH * (-g1[1]/glength)
-                    trackTopBound.points[i].y = p1[1] - TRACK_WIDTH * (g1[0]/glength)
+    curve1 = pygame.image.load('Images\TracksMapGen\Curve1.png')
+    curve1Rect = curve1.get_rect()
 
-                    trackBottomBound.points[i].x = p1[0] + TRACK_WIDTH * (-g1[1]/glength)
-                    trackBottomBound.points[i].y = p1[1] + TRACK_WIDTH * (g1[0]/glength)
-            if self.changed == True:
-                for i in range(N_POINTS ):
-                    p1 = track.GetSplinePoints(i * SPLINE_RESOLUTION, True)
-                    g1 = track.GetSplineGradient(i * SPLINE_RESOLUTION, True)
-                    glength = sqrt(g1[0] * g1[0] + g1[1] * g1[1])
+    curve2 = pygame.image.load('Images\TracksMapGen\Curve2.png')
+    curve2Rect = curve2.get_rect()
 
-                    trackTopBound.points[i].x = p1[0] - TRACK_WIDTH * (-g1[1]/glength)
-                    trackTopBound.points[i].y = p1[1] - TRACK_WIDTH * (g1[0]/glength)
+    curve3 = pygame.image.load('Images\TracksMapGen\Curve3.png')
+    curve3Rect = curve3.get_rect()
 
-                    trackBottomBound.points[i].x = p1[0] + TRACK_WIDTH * (-g1[1]/glength)
-                    trackBottomBound.points[i].y = p1[1] + TRACK_WIDTH * (g1[0]/glength)
+    curve4 = pygame.image.load('Images\TracksMapGen\Curve4.png')
+    curve4Rect = curve4.get_rect()
 
-        # draw track triangles and extract the lines out of the track
-        Lines = CT.TrackTriangles(
-            screen ,
-            Top=trackTopBound,
-            Bottom=trackBottomBound,
-            themeIndex=self.ThemeIndex,
-            updateLines=True,
-            Lines=TrackLines,
-            wireframe=wireframe,
-            wireframeLine=wireframeLine
-            )
+    straight1Top = pygame.image.load('Images\TracksMapGen\Straight1Top.png')
+    straight1RectTop = straight1Top.get_rect()
 
-        if debug:
-            trackBottomBound.Draw(screen, False)
-            trackTopBound.Draw(screen, False)
-            track.Draw(screen, MouseClicked, edit)
+    straight2Top = pygame.image.load('Images\TracksMapGen\Straight2Top.png')
+    straight2RectTop = straight2Top.get_rect()
 
-        if self.showPanel == True:
-            # might need to change the way i render ui for optimisation
-            panel.Render(screen)
-            quitSave.Render(screen)
-            editorModeText.Render(screen)
-            editText.Render(screen)
-            wireframeModeText.Render(screen)
-            showLineText.Render(screen)
+    curve1Top = pygame.image.load('Images\TracksMapGen\Curve1Top.png')
+    curve1RectTop = curve1Top.get_rect()
 
+    curve2Top = pygame.image.load('Images\TracksMapGen\Curve2Top.png')
+    curve2RectTop = curve2Top.get_rect()
 
-            editorMode = editorModeToggle.Render(screen, MouseClicked)
+    curve3Top = pygame.image.load('Images\TracksMapGen\Curve3Top.png')
+    curve3RectTop = curve3Top.get_rect()
 
-            edit = editToggle.Render(screen, MouseClicked)
-            wireframe = wireframeToggle.Render(screen, MouseClicked)
-            debug = ShowlineToggle .Render(screen, MouseClicked)
-            wireframeLine = debug
+    curve4Top = pygame.image.load('Images\TracksMapGen\Curve4Top.png')
+    curve4RectTop = curve4Top.get_rect()
 
-            if edit == True:
-                TrackWidthText.Render(screen)
-                TRACK_WIDTH = WidthSlider.Render(screen)
+    bg = pygame.image.load('Images\TracksMapGen\Background.png')
 
-        if quitSave.state == True:
-            saveChange = True
-            run = False
+    while True:
 
-        MouseClicked = False
-        if editorMode:
-            changed = True
+        #CurrentCell is the one at (0,3) position, im gonna look if there are unvisited cells from there
+        if len(maze.find_valid_neighbours(currentCell)) > 0:
+            if currentCell.x == 0 and currentCell.y == 3: #Second cell is always the one on top of first cell bc first cell is always a straight vertical track
+                oldCell = currentCell
+                currentCell = maze.cell_at(oldCell.x,oldCell.y-1)
+                currentCell.color = GREEN
+                oldCell.knock_down_wall(currentCell, "N")
+                trackLenght += 1 #Keep track of length so to discard very short generated tracks
+            else:
+                random_unvisited_direction = random.choice(maze.find_valid_neighbours(currentCell))[0] #Pick a random direction to move
+                oldCell = currentCell
+                if random_unvisited_direction == "N": #Move according to the direction picked
+                    currentCell = maze.cell_at(oldCell.x,oldCell.y-1)
+                elif random_unvisited_direction == "S":
+                    currentCell = maze.cell_at(oldCell.x,oldCell.y+1)
+                elif random_unvisited_direction == "E":
+                    currentCell = maze.cell_at(oldCell.x+1,oldCell.y)
+                elif random_unvisited_direction == "W":
+                    currentCell = maze.cell_at(oldCell.x-1,oldCell.y)
+                
+                oldCell.knock_down_wall(currentCell, random_unvisited_direction)
+                trackLenght += 1
+            
         else:
-            changed = False
+            #Track is ready (back in initial position)! lets check if its long enough
+            if currentCell.x == 0 and currentCell.y == 4 and trackLenght > 40:
+                currentCell.knock_down_wall(maze.cell_at(0,3), "N")
+                
+                for x in range(0, WINDOW_WIDTH, blockSize):
+                    for y in range(0, WINDOW_HEIGHT, blockSize):
+                        currentCell = maze.cell_at(int(x/blockSize),int(y/blockSize))
+                        currentCell.color = (0,0,1,255)
+                
+                for x in range(0, WINDOW_WIDTH, blockSize):
+                    for y in range(0, WINDOW_HEIGHT, blockSize):
+                        currentCell = maze.cell_at(int(x/blockSize),int(y/blockSize))
+                        
+                        if currentCell.walls["N"] == False and currentCell.walls["S"] == False:
+                            SCREEN.blit(straight2, straight2Rect.move(x+movex,y+movey))  
+                        elif currentCell.walls["E"] == False and currentCell.walls["W"] == False:
+                            SCREEN.blit(straight1, straight1Rect.move(x+movex,y+movey))  
+                        elif currentCell.walls["N"] == False and currentCell.walls["W"] == False:
+                            SCREEN.blit(curve3, curve3Rect.move(x+movex,y+movey)) 
+                        elif currentCell.walls["W"] == False and currentCell.walls["S"] == False:
+                            SCREEN.blit(curve2, curve2Rect.move(x+movex,y+movey))     
+                        elif currentCell.walls["S"] == False and currentCell.walls["E"] == False:
+                            SCREEN.blit(curve1, curve1Rect.move(x+movex,y+movey)) 
+                        elif currentCell.walls["E"] == False and currentCell.walls["N"] == False:
+                            SCREEN.blit(curve4, curve4Rect.move(x+movex,y+movey)) 
+                
+                #Save track and change background to transparent because that is how the main program needs the track image to be
+                #You can leave the black background if you change the collision condition on the main program
+                pygame.image.save(SCREEN, "randomGeneratedTrackBack.png")
+                img = Image.open("randomGeneratedTrackBack.png")
+                img = img.convert("RGBA")
+                pixdata = img.load()
+                for y in range(img.size[1]):
+                    for x in range(img.size[0]):
+                        if pixdata[x, y] == (0, 0, 0, 255) or pixdata[x, y] == (0, 0, 1, 255):
+                            pixdata[x, y] = (0, 0, 0, 0)
+                img.save("randomGeneratedTrackBack.png")
 
-        pygame.display.flip()
+                SCREEN.blit(bg, (0,0))  
+                for x in range(0, WINDOW_WIDTH, blockSize):
+                    for y in range(0, WINDOW_HEIGHT, blockSize):
+                        currentCell = maze.cell_at(int(x/blockSize),int(y/blockSize))
+                        if currentCell.walls["N"] == False and currentCell.walls["S"] == False:
+                            SCREEN.blit(straight2Top, straight2RectTop.move(x-20+movex,y+movey))  
+                        elif currentCell.walls["E"] == False and currentCell.walls["W"] == False:
+                            SCREEN.blit(straight1Top, straight1RectTop.move(x+movex,y-20+movey))  
+                        elif currentCell.walls["N"] == False and currentCell.walls["W"] == False:
+                            SCREEN.blit(curve3Top, curve3RectTop.move(x-15+movex,y-15+movey)) 
+                        elif currentCell.walls["W"] == False and currentCell.walls["S"] == False:
+                            SCREEN.blit(curve2Top, curve2RectTop.move(x-15+movex,y-15+movey))     
+                        elif currentCell.walls["E"] == False and currentCell.walls["N"] == False:
+                            SCREEN.blit(curve4Top, curve4RectTop.move(x-15+movex,y-15+movey))
+                        elif currentCell.walls["S"] == False and currentCell.walls["E"] == False:
+                            SCREEN.blit(curve1Top, curve1RectTop.move(x-15+movex,y-15+movey)) 
+                          
+                pygame.image.save(SCREEN, "randomGeneratedTrackFront.png")
 
-        if self.saveChange == True:
-            self.saveMap(track, trackTopBound, trackBottomBound, TrackLines, track_filename = 'map1')
-            
-            
-    def saveMap(self, track, trackTopBound, trackBottomBound, TrackLines, track_filename):
-        data = {
-                "TRACK":track,
-                "TOP_TRACK": trackTopBound,
-                "BOTTOM_TRACK": trackBottomBound,
-                "LINES": TrackLines,
-                "VARIABLES": {
-                    "N_POINTS": N_POINTS,
-                    "RESOLUTION": SPLINE_RESOLUTION,
-                    "TRACK_WIDTH": TRACK_WIDTH
-                }
-            }
-        pickle.dump(data, open(track_filename, 'wb'))
+                
+                break
 
-    def runSim(self):
-        pass
+                
+            else:
+                #It wasnt long enough so we start again
+                trackLenght = 0
+                for x in range(0, WINDOW_WIDTH, blockSize):
+                    for y in range(0, WINDOW_HEIGHT, blockSize):
+                        maze.cell_at(int(x/blockSize),int(y/blockSize)).walls["N"] = True
+                        maze.cell_at(int(x/blockSize),int(y/blockSize)).walls["S"] = True
+                        maze.cell_at(int(x/blockSize),int(y/blockSize)).walls["E"] = True
+                        maze.cell_at(int(x/blockSize),int(y/blockSize)).walls["W"] = True
+                        maze.cell_at(int(x/blockSize),int(y/blockSize)).color = 0, 0, 0
+                
+                #Force occupied cells
+                maze.cell_at(3,3).walls["N"] = False
+                maze.cell_at(4,3).walls["N"] = False
+                maze.cell_at(5,3).walls["N"] = False
+                maze.cell_at(6,3).walls["N"] = False
 
-    def getObstacles(self):
-        pass
-
-
-root = tk.Tk()
-app = Application(master = root)
-app.mainloop()
-
-
+                currentCell = maze.cell_at(startx, starty)
+    return
+ 
+generateRandomMap()
+ 
+pygame.quit()
+sys.exit()            
             
