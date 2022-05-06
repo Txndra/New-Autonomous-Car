@@ -1,4 +1,4 @@
-from ui import *
+from UI.UI import *
 from constants import *
 
 panel = Panel()

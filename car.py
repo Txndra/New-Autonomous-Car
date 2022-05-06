@@ -2,7 +2,7 @@ import pygame
 from math import degrees, sin, radians, copysign, atan2, cos, sin
 from pygame.math import Vector2
 from constants import *
-from utils import *
+from CT import CT
 
 class Car:
     def __init__(self, x, y, angle=0.0, length=4, max_steering=MAX_STEERING, max_acceleration=MAX_ACCELERATION):
@@ -28,13 +28,13 @@ class Car:
         self.lines = []
         self.sensors = []
         self.crashed = False
-        self.intersections = [Intersection(None, translate(MAX_SENSOR, 0, MAX_SENSOR, 0, 1)) for _ in range(5)]
+        self.intersections = [CT.Intersection(None, CT.translate(MAX_SENSOR, 0, MAX_SENSOR, 0, 1)) for _ in range(5)]
 
     def update(self,screen, dt, tracklines, debug=False):
 
         self.velocity += (self.acceleration * dt, 0)
         # max(-self.max_velocity, min(self.velocity.x, self.max_velocity))
-        self.velocity.x = clamp(self.velocity.x, -self.max_velocity, self.max_velocity)
+        self.velocity.x = CT.clamp(self.velocity.x, -self.max_velocity, self.max_velocity)
 
         if self.steering:
             turning_radius = self.length / sin(radians(self.steering))
@@ -85,11 +85,11 @@ class Car:
 
     def constrainAcceleration(self):
         # max(-self.max_acceleration, min(self.acceleration, self.max_acceleration))
-        self.acceleration = clamp(self.acceleration, -self.max_acceleration, self.max_acceleration)
+        self.acceleration = CT.clamp(self.acceleration, -self.max_acceleration, self.max_acceleration)
 
     def constrainSteering(self):
         # max(-self.max_steering, min(self.steering, self.max_steering))
-        self.steering = clamp(self.steering, -self.max_steering, self.max_steering)
+        self.steering = CT.clamp(self.steering, -self.max_steering, self.max_steering)
 
     def Right(self, dt):
         self.steering -= MAX_STEERING * dt
@@ -113,12 +113,12 @@ class Car:
 
     def checkSensorIntersection(self, raceTrackLines):
         self.intersections.clear()
-        self.intersections = [Intersection(None, translate(MAX_SENSOR, 0, MAX_SENSOR, 0, 1)) for _ in range(5)]
+        self.intersections = [CT.Intersection(None, CT.translate(MAX_SENSOR, 0, MAX_SENSOR, 0, 1)) for _ in range(5)]
 
         for i in range(len(self.sensors)):
-            closest = Intersection(None, translate(MAX_SENSOR, 0, MAX_SENSOR, 0, 1))
+            closest = CT.Intersection(None, CT.translate(MAX_SENSOR, 0, MAX_SENSOR, 0, 1))
             for l in raceTrackLines:
-                intersection = LineLineIntersection(
+                intersection = CT.LineLineIntersection(
                 self.center.x, self.center.y,
                 self.sensors[i].x, self.sensors[i].y,
                 l['a'][0], l['a'][1],
@@ -126,9 +126,9 @@ class Car:
                 )
                 if intersection != None:
 
-                    inters = Intersection(intersection,
-                        translate(
-                        GetDistance(self.center, Vector2(intersection[0], intersection[1]))
+                    inters = CT.Intersection(intersection,
+                        CT.translate(
+                        CT.GetDistance(self.center, Vector2(intersection[0], intersection[1]))
                         , 0, MAX_SENSOR, 0, 1 )
                         )
                     if inters["distance"] < closest["distance"]:
@@ -148,8 +148,8 @@ class Car:
         x1 = t0 * ((-w/2)+7) + px
         y1 = t1 * ((-h/2)+7) + py
 
-        LeftLine = GetPerpendicular(Vector2(x,y), Vector2(x1, y1), CAR_SIZE[1]/2)
-        RightLine = GetPerpendicular(Vector2(x1, y1), Vector2(x, y), CAR_SIZE[1]/2)
+        LeftLine = CT.GetPerpendicular(Vector2(x,y), Vector2(x1, y1), CAR_SIZE[1]/2)
+        RightLine = CT.GetPerpendicular(Vector2(x1, y1), Vector2(x, y), CAR_SIZE[1]/2)
         BottomLine = [LeftLine[0], RightLine[0]]
         TopLine = [LeftLine[1], RightLine[1]]
 
@@ -168,7 +168,7 @@ class Car:
     def CheckDeath(self, raceLines):
         for line in self.lines:
             for l in raceLines:
-                intersection = LineLineIntersection(
+                intersection = CT.LineLineIntersection(
                     line[0][0], line[0][1],
                     line[1][0], line[1][1],
                     l['a'][0], l['a'][1],

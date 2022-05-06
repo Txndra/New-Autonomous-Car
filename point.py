@@ -3,12 +3,12 @@ from constants import Width, Height, Green, Black, White
 from math import sqrt
 
 class Point:
-    def __init__(self, x=Width//2, y=Height//2, radius=5, color=(40, 240, 235)):
+    def __init__(self, x=Width//2, y=Height//2, radius=5, color=(40,240,235)):
         self.x = x
         self.y = y
         self.color = color
         self.temp = color
-        self.selectColor = (225, 40, 245)
+        self.selectColor = (255,40,255)
         self.radius = radius
         self.selected = False
         self.label = None
@@ -18,6 +18,7 @@ class Point:
 
     def parseToInt(self):
         return (int(self.x), int(self.y))
+
 
     def update(self, clicked):
         mouseX, mouseY = pygame.mouse.get_pos()
@@ -44,6 +45,6 @@ class Point:
             textRect = text.get_rect()
             setattr(textRect, "center", (self.x, self.y+30))
             screen.blit(text, textRect)
-
+    
 def GetDistance(x1, y1, x2, y2):
-    return sqrt( (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+        return sqrt( (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))

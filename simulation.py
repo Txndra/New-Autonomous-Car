@@ -7,9 +7,10 @@ from spline import Spline
 from math import sin, radians, degrees, copysign, sqrt
 from pygame.math import Vector2
 from car import Car
-from utils import TrackTriangles, translate
+from CT import CT
 from constants import *
-from setup import *
+from UI.setup import *
+
 pygame.init()
 # pygame.display.set_caption(" Self Driving Car")
 screen = pygame.display.set_mode((Width, Height), vsync=True)
@@ -19,7 +20,7 @@ fps = 60
 # load Assets
 track_filename = "./map/new_track3"
 current_directory = os.path.dirname(os.path.abspath(__file__))
-carImage_path = os.path.join(current_directory, "car2.png")
+carImage_path = os.path.join(current_directory, "./Assets/car2.png")
 car_sprite = pygame.image.load(carImage_path)
 sprite = pygame.transform.scale(car_sprite, CAR_SIZE)
 
@@ -27,20 +28,20 @@ sprite = pygame.transform.scale(car_sprite, CAR_SIZE)
 
 #  ---- Initiate New splines and lines ---
 
-'''track = Spline()
-trackTopBound = Spline()
-trackBottomBound = Spline()
-trackTopBound.pointRadius = 1
-trackBottomBound.pointRadius = 1
+# track = Spline()
+# trackTopBound = Spline()
+# trackBottomBound = Spline()
+# trackTopBound.pointRadius = 1
+# trackBottomBound.pointRadius = 1
 
-track.CreatePoints(N_POINTS, False)
-trackBottomBound.CreatePoints(N_POINTS, False)
-trackTopBound.CreatePoints(N_POINTS, False)
+# track.CreatePoints(N_POINTS, False)
+# trackBottomBound.CreatePoints(N_POINTS, False)
+# trackTopBound.CreatePoints(N_POINTS, False)
 
-track.resolution = SPLINE_RESOLUTION
-trackBottomBound.resolution = SPLINE_RESOLUTION
-trackTopBound.resolution = SPLINE_RESOLUTION
-TrackLines = []'''
+# track.resolution = SPLINE_RESOLUTION
+# trackBottomBound.resolution = SPLINE_RESOLUTION
+# trackTopBound.resolution = SPLINE_RESOLUTION
+# TrackLines = []
 
 # -- OR --
 
@@ -196,7 +197,7 @@ def Fitness(genomes, config):
                 trackBottomBound.points[i].y = p1[1] + TRACK_WIDTH * (g1[0]/glength)
 
         # draw track triangles and extract the lines out of the track
-        Lines = TrackTriangles(
+        Lines = CT.TrackTriangles(
             screen ,
             Top=trackTopBound,
             Bottom=trackBottomBound,

@@ -1,5 +1,6 @@
-Width = 1280
-Height = 1024
+Width = 1920
+EMPTY_STRING = ''
+Height = 1080
 
 Black = (0, 0, 0)
 White = (255, 255, 255)
@@ -14,7 +15,7 @@ Cyan = (0, 255, 255)
 MAX_SENSOR = Width
 
 MAX_STEERING = 100
-MAX_VELOCITY = 2
+MAX_VELOCITY = 3
 MAX_ACCELERATION = 1.0
 
 CAR_SIZE = (60, 30)
