@@ -2,7 +2,7 @@ import pygame
 from constants import *
 from math import sqrt
 from pygame.math import Vector2
-
+#methematical methods used to help cars navigate the track, and draw the track
 class CT:
 
     def clamp(num, min_value, max_value):

@@ -1,3 +1,9 @@
+#Program source code by Cathline Sean Dougan
+#Project start 23/07/21
+#Project end TBA
+#Autonomous car simulation using neural networks and pygame
+
+
 import os
 import pygame
 import pickle
@@ -56,9 +62,20 @@ class Application(tk.Frame): #Class to display main menu.
         newsim = Simulation()
 
 
+if __name__ == "__main__":
+    cwd = os.getcwd()
+    try: 
+        os.makedirs(cwd + '/weights') #makes a weights folder
+    except:
+        pass
 
-root = tk.Tk()
-app = Application(master = root)
-app.mainloop() 
+    try:
+        os.makedirs(cwd + '/maps') #makes a map folder
+    except:
+        pass
+
+    root = tk.Tk()
+    app = Application(master = root)
+    app.mainloop()
 
 

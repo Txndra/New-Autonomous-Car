@@ -3,7 +3,7 @@ import pygame
 import pickle
 import neat
 from point import Point, GetDistance
-from spline import Spline
+from mapsetup import Spline
 from math import sin, radians, degrees, copysign, sqrt
 from pygame.math import Vector2
 from car import Car
@@ -24,13 +24,14 @@ class Simulation:
         # load Assets
         self.track_filename = "./map/new_track"
         self.current_directory = os.path.dirname(os.path.abspath(__file__))
-        self.carImage_path = os.path.join(self.current_directory, "./Assets/car1.png")
+        self.carImage_path = os.path.join(self.current_directory, "./Assets/car2.png")
         self.car_sprite = pygame.image.load(self.carImage_path)
         self.sprite = pygame.transform.scale(self.car_sprite, CAR_SIZE)
 
         self.filename = self.track_filename
         (self.track, self.trackTopBound, self.trackBottomBound, self.TrackLines) = self.loadData()
-        self.debug=False
+        self.startPoint = self.track.points[0]
+        self.debug=True
         self.editorMode = False
         self.edit=False
         self.wireframe=False
@@ -50,6 +51,7 @@ class Simulation:
         self.run(config_path)
 
     def loadData(self):
+        #Loads pickle file
         mapData = pickle.load(open(self.filename, 'rb'))
         track = mapData['TRACK']
         trackTopBound = mapData['TOP_TRACK']
@@ -58,17 +60,17 @@ class Simulation:
 
         return track, trackTopBound, trackBottomBound, TrackLines
 
-    def Fitness(self,genomes, config): 
+    def Fitness(self,genomes, config):  
         nets = []
         genes = []
         cars = []
 
         for index, genome in genomes:
             genome.fitness = 0
-            nn = neat.nn.FeedForwardNetwork.create(genome, config)
+            nn = neat.nn.FeedForwardNetwork.create(genome, config) #Initiates neural network from neat module.
             nets.append(nn)
 
-            car = Car(4, 20)
+            car = Car(12, 20)
             car.sprite = self.sprite
             car.angle = 90
             cars.append(car)
@@ -84,7 +86,7 @@ class Simulation:
         PopulationText.text = "Population size: " + str(len(cars))
         survivors = len(cars)
         while run:
-            self.screen.fill(Themes[self.ThemeIndex]["background"])
+            self.screen.fill(Themes[self.ThemeIndex]["background"]) #Changes pygame screen to fit background selected.
 
             dt = self.clock.get_time()/1000
             self.clock.tick(self.fps)
@@ -109,6 +111,7 @@ class Simulation:
             for index, car in enumerate(cars):
 
                 car.Forward(dt)
+                #Traverses through network
                 genes[index].fitness += 0.1
                 output = nets[index].activate(
                     (
@@ -119,10 +122,12 @@ class Simulation:
                     abs(car.intersections[4]["distance"]),
                     )
                 )
+                #Uses activation function to calculate an output from car radars (distance)
 
                 i = output.index(max(output))
+                #Car goes left or right depending on output
                 if i == 0:
-                    car.Left(dt)
+                    car.Left(dt) 
                 else:
                     car.Right(dt)
 
@@ -146,6 +151,7 @@ class Simulation:
                 wireframe=self.wireframe,
                 wireframeLine=self.wireframeLine
                 )
+            
 
             if self.debug:
                 self.trackBottomBound.Draw(self.screen, False)
@@ -155,16 +161,16 @@ class Simulation:
             if len(cars) > 0:
                 for index, car in enumerate(cars):
 
-                    car.update(self.screen, dt, self.TrackLines, self.debug)
-                    car.Draw(self.screen, self.debug)
+                    car.update(self.screen, dt, self.TrackLines, self.debug) #updates car
+                    car.Draw(self.screen, self.debug) #draws car
 
                     if car.crashed == True:
-                        pygame.draw.circle(self.screen, Red, car.center, 8)
+                        pygame.draw.circle(self.screen, Red, car.center, 8) #When a car crashes, a red circle is displayed to indicate
                         genes[index].fitness -= 1
-                        cars.pop(index)
-                        nets.pop(index)
+                        cars.pop(index) #Car gets removed
+                        nets.pop(index) 
                         genes.pop(index)
-                        survivors -= 1
+                        survivors -= 1 #Count decreases when car dies
             else:
                 run = False
 
@@ -172,7 +178,7 @@ class Simulation:
                 gene.fitness += 2
 
             counter += 1
-
+            #Displays stats
             GenerationText.Render(self.screen)
             PopulationText.Render(self.screen)
             AgentAliveText.text = "Alive : " + str(survivors)

@@ -7,23 +7,28 @@ from math import sqrt, pow, sin, cos, pi
 class Spline:
     def __init__(self):
         self.points = []
-        self.pointRadius = 10
-        self.resolution = 40
+        self.pointRadius = 10 
+        self.resolution = 40 
         self.lineWidth = 5
-        self.lineColor = White
+        self.lineColor = White #spline line colour seen when editing track
         self.move = 0
         self.length = 0
 
     def CreatePoints(self, n, showLabel=False):
         for i in range(n):
-            x = INITIAL_POINT_RADIUS_SPLINE * sin( i/n * pi * 2) + Width//2
-            y = INITIAL_POINT_RADIUS_SPLINE * cos( i/n * pi * 2) + Height//2
-            point = Point(x, y, self.pointRadius)
-            if showLabel:
+            x = INITIAL_POINT_RADIUS_SPLINE * sin( i/n * pi * 2) + Width//2 #Calculates x coordinate for point
+            y = INITIAL_POINT_RADIUS_SPLINE * cos( i/n * pi * 2) + Height//2 #Calculates y coordinate for point
+            point = Point(x, y, self.pointRadius) #Instantiates point class with coordinates and radius
+            if showLabel: #If the user wants to see the options
                 point.label = "P" + str(i)
-            self.points.append(point)
+            self.points.append(point) #Adds each point to the array
+        
+    def returnStartPoint(self):
+        startPoint = self.points[0]
+        x, y = startPoint[0], startPoint[1]
 
     def GetSplinePoints(self, t, loop=False):
+        #Formula used to get points of the splines
         t = t/self.resolution
 
         if loop == False:
@@ -66,6 +71,7 @@ class Spline:
         return length
 
     def GetSplineGradient(self, t, loop=False):
+        #Formula used to get line gradients
 
         t = t/self.resolution
 
@@ -110,11 +116,11 @@ class Spline:
             pygame.draw.rect(screen, self.lineColor, [int(x), int(y), self.lineWidth, self.lineWidth])
 
         if editor:
-            for i in range(len(self.points)):
-                self.points[i].length = self.CalculateSegmentLength(i , True)
+            for i in range(len(self.points)): #For each point
+                self.points[i].length = self.CalculateSegmentLength(i , True) #Calculates length of each piont and appends
                 self.length += self.points[i].length
-                self.points[i].update(clicked)
-                self.points[i].Draw(screen)
+                self.points[i].update(clicked) #Updates position of points based on mouse
+                self.points[i].Draw(screen) #Draws points onto screen
                 #print(self.points[i].length)
 
             # print(self.length)

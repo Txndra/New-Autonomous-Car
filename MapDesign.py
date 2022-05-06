@@ -3,7 +3,7 @@ import pygame
 import pickle
 import neat
 from point import Point, GetDistance
-from spline import Spline
+from mapsetup import Spline
 from math import sin, radians, degrees, copysign, sqrt
 from pygame.math import Vector2
 from car import Car
@@ -31,7 +31,7 @@ class MapDesign:
         self.showPanel = False
         self.createMap()
 
-    def renderTexts(self, screen):
+    def renderTexts(self, screen): #Displays text
         panel.Render(screen)
         quitSave.Render(screen)
         editorModeText.Render(screen)
@@ -69,7 +69,8 @@ class MapDesign:
         screen = pygame.display.set_mode((Width, Height), vsync=True)
         clock = pygame.time.Clock()
         fps = 60
-        track = Spline()
+        #instantiates spline class for track and two bounds
+        track = Spline() 
         trackTopBound = Spline()
         trackBottomBound = Spline()
         trackTopBound.pointRadius = 1
@@ -138,14 +139,14 @@ class MapDesign:
             Lines=TrackLines,
             wireframe=self.wireframe,
             wireframeLine=self.wireframeLine
-            )
+            ) #Draws track from CT.py
 
             if self.debug:
-                trackBottomBound.Draw(screen, False)
+                trackBottomBound.Draw(screen, False) #Draws bounds separately
                 trackTopBound.Draw(screen, False)
 
             if self.editorMode:
-                track.Draw(screen, MouseClicked, self.edit)
+                track.Draw(screen, MouseClicked, self.edit) #Allows user to click and edit points for spline
 
             if self.showPanel == True:
             # might need to change the way i render ui for optimisation
@@ -173,7 +174,7 @@ class MapDesign:
 
             pygame.display.flip()
         if self.saveChange == True:
-            track_filename = "./map/new_track"
+            track_filename = "./map/new_track" 
             current_directory = os.path.dirname(os.path.abspath(__file__))
             self.saveMap(track, trackTopBound, trackBottomBound, TrackLines, track_filename)
 
@@ -182,6 +183,7 @@ class MapDesign:
 
 
     def saveMap(self, track, trackTopBound, trackBottomBound, TrackLines, trackName):
+        #Uses pickle module to save track
         data = {
             "TRACK":track,
             "TOP_TRACK": trackTopBound,
